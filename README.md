@@ -8,3 +8,8 @@ Download the model using the following command:
 curl -L -o models/ggml-large-v3-turbo.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
 
+Create GCP project:
+https://console.cloud.google.com/
+
+Enable drive api:
+https://console.cloud.google.com/apis/library/drive.googleapis.com

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::process::Command;
 use google_drive3::{DriveHub, hyper_rustls, hyper_util, yup_oauth2};
 use http_body_util::BodyExt;
-
+use crate::workers::transcription::WorkerMessage;
 
 pub enum Provider {
     GoogleDrive,
@@ -22,7 +22,8 @@ pub struct StorageDownloadMessage{
 type HttpsConnector = hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>;
 pub type GDriveHub = DriveHub<HttpsConnector>;
 
-pub async fn spawn_worker_video_storage(hub:  Arc<GDriveHub>) -> mpsc::Sender<StorageDownloadMessage> {
+pub async fn spawn_worker_video_storage(hub:  Arc<GDriveHub>, 
+                                        tx_transcription: mpsc::Sender<WorkerMessage>) -> mpsc::Sender<StorageDownloadMessage> {
     let (tx, mut rx) = mpsc::channel::<StorageDownloadMessage>(100);
 
     tokio::spawn(async move {
@@ -32,6 +33,13 @@ pub async fn spawn_worker_video_storage(hub:  Arc<GDriveHub>) -> mpsc::Sender<St
                 Provider::GoogleDrive => {
                     download_from_gdrive(&hub, &msg.link, &msg.output_path).await;
                     audio_output_path = video_to_audio(&msg.output_path).await;
+                    let message = WorkerMessage{
+                        audio_path:  audio_output_path,
+                        number_of_videos: msg.number_of_videos,
+                        max_short_length: msg.max_short_length
+                    };
+
+                    tx_transcription.send(message).await;
                 },
                 _ => println!("Not a valid provider")
             };

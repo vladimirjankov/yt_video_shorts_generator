@@ -16,3 +16,4 @@ hyper-rustls = "*"
 hyper-util = "*"
 http-body-util = "0.1"
 rustls = { version = "0.23", features = ["ring"] }
+hound = "3.5.1"

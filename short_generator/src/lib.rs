@@ -16,10 +16,13 @@ async fn init_app_state() -> Arc<AppState> {
     
     let ctx = init_whisper("../models/ggml-large-v3-turbo.bin");
     let hub = Arc::new(build_drive_hub().await);
+
+    let tx_t = spawn_worker_transcription(Arc::clone(&ctx)).await;
+    let tx_vs = spawn_worker_video_storage(Arc::clone(&hub), tx_t.clone()).await;
     // create app state
     Arc::new(AppState{
-        tx_transcription: spawn_worker_transcription(Arc::clone(&ctx)).await,
-        tx_video_storage: spawn_worker_video_storage(Arc::clone(&hub)).await
+        tx_transcription: tx_t,
+        tx_video_storage: tx_vs
     })
 }
 
