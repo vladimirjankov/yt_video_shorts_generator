@@ -8,7 +8,7 @@ pub struct WorkerMessage {
     pub max_short_length: i32
 }
 
-pub async fn spawn_worker(ctx: Arc<WhisperContext>) -> mpsc::Sender<WorkerMessage> {
+pub async fn spawn_worker_transcription(ctx: Arc<WhisperContext>) -> mpsc::Sender<WorkerMessage> {
     let (tx, mut rx) = mpsc::channel::<WorkerMessage>(100);
 
     tokio::spawn(async move {

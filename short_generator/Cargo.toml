@@ -8,3 +8,11 @@ axum = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
 whisper-rs = "0.16.0"
+reqwest = { version = "0.12", features = ["stream"] }
+uuid = { version = "1.23.1", features = ["v4"] }
+google-drive3 = "*"
+yup-oauth2 = "*"
+hyper-rustls = "*"
+hyper-util = "*"
+http-body-util = "0.1"
+rustls = { version = "0.23", features = ["ring"] }

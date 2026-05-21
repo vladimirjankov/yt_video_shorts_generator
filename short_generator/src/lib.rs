@@ -1,20 +1,25 @@
 mod routes;
-use axum::{routing::get, Router};
+mod workers;
+use axum::{Router};
 use tokio::sync::mpsc;
 use std::sync::Arc;
-use routes::transcription::{WorkerMessage, spawn_worker, init_whisper};
+use workers::transcription::{WorkerMessage, spawn_worker_transcription, init_whisper};
+use workers::video_storage::{spawn_worker_video_storage, StorageDownloadMessage, build_drive_hub};
 use routes::shorts::shorts_routes;
 
 pub struct AppState{
-    tx: mpsc::Sender<WorkerMessage>,
+    tx_transcription: mpsc::Sender<WorkerMessage>,
+    tx_video_storage: mpsc::Sender<StorageDownloadMessage>,
 }
 
 async fn init_app_state() -> Arc<AppState> {    
     
     let ctx = init_whisper("../models/ggml-large-v3-turbo.bin");
+    let hub = Arc::new(build_drive_hub().await);
     // create app state
     Arc::new(AppState{
-        tx: spawn_worker(Arc::clone(&ctx)).await
+        tx_transcription: spawn_worker_transcription(Arc::clone(&ctx)).await,
+        tx_video_storage: spawn_worker_video_storage(Arc::clone(&hub)).await
     })
 }
 
