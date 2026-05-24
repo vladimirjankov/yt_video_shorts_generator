@@ -3,26 +3,36 @@ use whisper_rs::{WhisperContext, WhisperContextParameters, FullParams, SamplingS
 use std::sync::Arc;
 use std::path::Path;
 use hound;
+use crate::workers::gemini_analysis::AnalysisMessage;
+
 
 pub struct WorkerMessage {
     pub audio_path: String,
+    pub video_path: String,
     pub number_of_videos: i32,
-    pub max_short_length: i32
+    pub max_short_length: i32,
 }
 
-pub async fn spawn_worker_transcription(ctx: Arc<WhisperContext>) -> mpsc::Sender<WorkerMessage> {
+pub async fn spawn_worker_transcription(
+    ctx: Arc<WhisperContext>,
+    tx_gemini: mpsc::Sender<AnalysisMessage>,
+) -> mpsc::Sender<WorkerMessage> {
     let (tx, mut rx) = mpsc::channel::<WorkerMessage>(100);
 
     tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
             println!("Processing: {}", msg.audio_path);
-            process_message(&ctx, msg);
+            process_message(&ctx, msg, &tx_gemini).await;
         }
     });
     tx
 }
 
-pub fn process_message(ctx: &WhisperContext, msg: WorkerMessage){
+pub async fn process_message(
+    ctx: &WhisperContext,
+    msg: WorkerMessage,
+    tx_gemini: &mpsc::Sender<AnalysisMessage>,
+) {
     let mut state = ctx.create_state().expect("failed to create whisper state");
 
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
@@ -58,6 +68,13 @@ pub fn process_message(ctx: &WhisperContext, msg: WorkerMessage){
     let out_path = Path::new(&msg.audio_path).with_extension("srt");
     std::fs::write(&out_path, &srt).expect("failed to write transcript");
     println!("transcript saved to {}", out_path.display());
+
+    let _ = tx_gemini.send(AnalysisMessage {
+        srt_content: srt,
+        video_path: Some(msg.video_path),
+        number_of_videos: msg.number_of_videos,
+        max_short_length: msg.max_short_length,
+    }).await;
 }
 
 fn format_srt_timestamp(cs: i64) -> String {
@@ -76,4 +93,3 @@ pub fn init_whisper(model_path: &str) -> Arc<WhisperContext> {
         WhisperContext::new_with_params(model_path, params).expect("Failed to load whisper model...")
     )
 }
-

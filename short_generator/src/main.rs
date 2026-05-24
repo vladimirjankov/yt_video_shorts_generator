@@ -3,6 +3,7 @@ use short_generator::create_app;
 
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().ok();
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("failed to install rustls CryptoProvider");
