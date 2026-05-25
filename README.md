@@ -17,3 +17,11 @@ https://console.cloud.google.com/apis/library/drive.googleapis.com
 Generate api key in google studios
 https://aistudio.google.com/app/api-keys?project=gen-lang-client-0317339696
 Create .env file in the root of the project and place it like this GEMINI_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+
+Or go with the Docker:
+docker run --rm -p 3000:3000 \
+  -e GEMINI_API_KEY="$GEMINI_API_KEY" \
+  -v "$(pwd)/service_account.json:/app/service_account.json:ro" \
+  -v "$(pwd)/downloads:/app/downloads" \
+  short-gen

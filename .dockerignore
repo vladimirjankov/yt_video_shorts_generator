@@ -1,0 +1,13 @@
+**/target
+**/.git
+**/.venv
+.env
+service_account.json
+models
+downloads
+*.bin
+*.wav
+*.mp4
+*.srt
+README.md
+.gitignore
