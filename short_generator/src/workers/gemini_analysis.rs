@@ -53,23 +53,30 @@ pub async fn analyse_with_gemini(srt_content: &str, max_short_length: i32, numbe
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     );
 
+    let total_duration = extract_last_timestamp(srt_content).unwrap_or_else(|| "unknown".to_string());
+
     let body = serde_json::json!({
         "contents": [{
             "parts": [{
                 "text": format!(
-                    "Analyze this SRT transcript and identify the best segments for short videos. \
-                     Max number of short videos {} and a minimum of 1.
-                     Each segment must be max {} seconds long. Return ONLY a JSON array.\n\n{}",
-                    number_of_videos, max_short_length ,srt_content
+                    "You are selecting the strongest segments from a video transcript to use as standalone short clips. \
+                     The transcript spans from 00:00:00,000 to approximately {total_duration}. \
+                     Read the entire transcript carefully before deciding — the position of a moment in the video \
+                     has no bearing on its value. A great hook at minute 15 is just as valid as one at minute 1. \
+                     Select up to {number_of_videos} segments (minimum 1), each at most {max_short_length} seconds long. \
+                     Judge each candidate on its own merit: humor, surprise, emotional payoff, a punchy claim, \
+                     a satisfying reveal, a quotable line, a cliff-hanger that makes someone want more. \
+                     Always extend the end of each segment by half a second so the clip doesn't cut mid-word. \
+                     Return ONLY a JSON array.\n\n{srt_content}"
                 )
             }]
         }],
         "generationConfig": {
             "responseMimeType": "application/json",
             "maxOutputTokens": 2048,
-            "temperature": 0.4,
+            "temperature": 0.7,
             "thinkingConfig": {
-                "thinkingBudget": 0
+                "thinkingBudget": 1024
             },
             "responseSchema": {
                 "type": "ARRAY",
@@ -129,3 +136,10 @@ pub async fn analyse_with_gemini(srt_content: &str, max_short_length: i32, numbe
         }
     }
 }
+
+fn extract_last_timestamp(srt: &str) -> Option<String> {
+    srt.lines()
+        .rev()
+        .find_map(|l| l.split(" --> ").nth(1).map(|s| s.trim().to_string()))
+}
+
