@@ -142,4 +142,3 @@ fn extract_last_timestamp(srt: &str) -> Option<String> {
         .rev()
         .find_map(|l| l.split(" --> ").nth(1).map(|s| s.trim().to_string()))
 }
-
