@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::path::Path;
 use hound;
 use crate::workers::gemini_analysis::AnalysisMessage;
+use crate::workers::captions::{CaptionStyle, Word};
 
 
 pub struct WorkerMessage {
@@ -11,6 +12,7 @@ pub struct WorkerMessage {
     pub video_path: String,
     pub number_of_videos: i32,
     pub max_short_length: i32,
+    pub caption_style: Option<CaptionStyle>,
 }
 
 pub async fn spawn_worker_transcription(
@@ -39,6 +41,8 @@ pub async fn process_message(
     params.set_language(Some("sr"));
     params.set_print_progress(false);
     params.set_print_realtime(false);
+    params.set_token_timestamps(true);
+    params.set_split_on_word(true);
 
 
     let reader = hound::WavReader::open(&msg.audio_path).expect("failed to open wav");
@@ -51,6 +55,7 @@ pub async fn process_message(
 
     let num_segments = state.full_n_segments();
     let mut srt = String::new();
+    let mut words: Vec<Word> = Vec::new();
     for i in 0..num_segments {
         let segment = state.get_segment(i).unwrap();
         let text = segment.to_str().unwrap();
@@ -63,18 +68,53 @@ pub async fn process_message(
             format_srt_timestamp(t1),
             text.trim(),
         ));
+        collect_words(&segment, &mut words);
     }
 
     let out_path = Path::new(&msg.audio_path).with_extension("srt");
     std::fs::write(&out_path, &srt).expect("failed to write transcript");
-    println!("transcript saved to {}", out_path.display());
+    println!("transcript saved to {} ({} words)", out_path.display(), words.len());
 
     let _ = tx_gemini.send(AnalysisMessage {
         srt_content: srt,
         video_path: Some(msg.video_path),
         number_of_videos: msg.number_of_videos,
         max_short_length: msg.max_short_length,
+        caption_style: msg.caption_style,
+        words: Some(words),
     }).await;
+}
+
+/// Merge a segment's tokens into whole words. With `split_on_word` enabled,
+/// whisper starts a new word at a leading space; special `[_...]` tokens are
+/// skipped. Token timestamps are centiseconds.
+fn collect_words(segment: &whisper_rs::WhisperSegment, words: &mut Vec<Word>) {
+    for t in 0..segment.n_tokens() {
+        let Some(token) = segment.get_token(t) else { continue };
+        let Ok(text) = token.to_str() else { continue };
+        if text.starts_with("[_") || text.is_empty() {
+            continue;
+        }
+        let data = token.token_data();
+        let start_ms = data.t0 * 10;
+        let end_ms = data.t1 * 10;
+
+        let starts_word = text.starts_with(' ') || words.is_empty();
+        let piece = text.trim();
+        if piece.is_empty() {
+            continue;
+        }
+        if starts_word {
+            words.push(Word {
+                text: piece.to_string(),
+                start_ms,
+                end_ms,
+            });
+        } else if let Some(last) = words.last_mut() {
+            last.text.push_str(piece);
+            last.end_ms = end_ms;
+        }
+    }
 }
 
 fn format_srt_timestamp(cs: i64) -> String {

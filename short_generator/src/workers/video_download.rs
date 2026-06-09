@@ -4,6 +4,7 @@ use google_drive3::{DriveHub, hyper_rustls, hyper_util, yup_oauth2};
 use http_body_util::BodyExt;
 use crate::workers::video_storage::VideoStorageMessage;
 use crate::workers::gemini_analysis::AnalysisMessage;
+use crate::workers::captions::CaptionStyle;
 
 
 pub enum Provider {
@@ -21,11 +22,13 @@ pub enum DownloadDestination {
     VideoStorage {
         number_of_videos: i32,
         max_short_length: i32,
+        caption_style: Option<CaptionStyle>,
     },
     GeminiSrt {
         number_of_videos: i32,
         max_short_length: i32,
         video: Option<VideoToDownload>,
+        caption_style: Option<CaptionStyle>,
     },
 }
 
@@ -52,14 +55,15 @@ pub async fn spawn_worker_video_download(
                     download_from_gdrive(&hub, &msg.link, &msg.output_path).await;
 
                     match msg.destination {
-                        DownloadDestination::VideoStorage { number_of_videos, max_short_length } => {
+                        DownloadDestination::VideoStorage { number_of_videos, max_short_length, caption_style } => {
                             let _ = tx_storage.send(VideoStorageMessage {
                                 video_path: msg.output_path,
                                 number_of_videos,
                                 max_short_length,
+                                caption_style,
                             }).await;
                         }
-                        DownloadDestination::GeminiSrt { number_of_videos, max_short_length, video } => {
+                        DownloadDestination::GeminiSrt { number_of_videos, max_short_length, video, caption_style } => {
                             let srt_content = tokio::fs::read_to_string(&msg.output_path)
                                 .await
                                 .expect("failed to read downloaded srt");
@@ -76,6 +80,8 @@ pub async fn spawn_worker_video_download(
                                 video_path,
                                 number_of_videos,
                                 max_short_length,
+                                caption_style,
+                                words: None,
                             }).await;
                         }
                     }

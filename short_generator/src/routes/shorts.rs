@@ -4,6 +4,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use crate::AppState;
 use crate::workers::video_download::{DownloadMessage, DownloadDestination, VideoToDownload};
+use crate::workers::captions::CaptionStyle;
 
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -11,6 +12,8 @@ pub struct VideoTask {
     pub link: String,
     pub number_of_videos: i32,
     pub max_short_length: i32,
+    #[serde(default)]
+    pub caption_style: Option<CaptionStyle>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -19,6 +22,8 @@ pub struct SrtTask {
     pub video_link: Option<String>,
     pub number_of_videos: i32,
     pub max_short_length: i32,
+    #[serde(default)]
+    pub caption_style: Option<CaptionStyle>,
 }
 
 pub fn shorts_routes() -> Router<Arc<AppState>> {
@@ -37,6 +42,7 @@ pub async fn post_video(
         destination: DownloadDestination::VideoStorage {
             number_of_videos: payload.number_of_videos,
             max_short_length: payload.max_short_length,
+            caption_style: payload.caption_style,
         },
     };
     state.tx_video_download.send(message).await.unwrap();
@@ -59,6 +65,7 @@ pub async fn post_srt(
             number_of_videos: payload.number_of_videos,
             max_short_length: payload.max_short_length,
             video,
+            caption_style: payload.caption_style,
         },
     };
     state.tx_video_download.send(message).await.unwrap();

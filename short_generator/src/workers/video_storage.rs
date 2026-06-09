@@ -2,12 +2,14 @@ use tokio::sync::mpsc;
 use std::path::Path;
 use tokio::process::Command;
 use crate::workers::transcription::WorkerMessage;
+use crate::workers::captions::CaptionStyle;
 
 
 pub struct VideoStorageMessage {
     pub video_path: String,
     pub number_of_videos: i32,
     pub max_short_length: i32,
+    pub caption_style: Option<CaptionStyle>,
 }
 
 pub async fn spawn_worker_video_storage(
@@ -23,6 +25,7 @@ pub async fn spawn_worker_video_storage(
                 video_path: msg.video_path,
                 number_of_videos: msg.number_of_videos,
                 max_short_length: msg.max_short_length,
+                caption_style: msg.caption_style,
             }).await;
         }
     });

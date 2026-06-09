@@ -23,7 +23,7 @@ async fn init_app_state() -> Arc<AppState> {
     let ctx = init_whisper("../models/ggml-large-v3-turbo.bin");
     let hub = Arc::new(build_drive_hub().await);
 
-    let tx_c  = spawn_worker_cutter().await;
+    let tx_c  = spawn_worker_cutter(api_key.clone()).await;
     let tx_g  = spawn_worker_gemini_analysis(api_key, tx_c.clone()).await;
     let tx_t  = spawn_worker_transcription(Arc::clone(&ctx), tx_g.clone()).await;
     let tx_vs = spawn_worker_video_storage(tx_t.clone()).await;

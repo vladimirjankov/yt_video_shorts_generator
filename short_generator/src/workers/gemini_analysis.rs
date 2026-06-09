@@ -1,6 +1,7 @@
 use tokio::sync::mpsc;
 use serde::{Deserialize, Serialize};
 use crate::workers::cutter::CutterMessage;
+use crate::workers::captions::{CaptionAnnotation, CaptionStyle, Word};
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -15,6 +16,8 @@ pub struct AnalysisMessage {
     pub video_path: Option<String>,
     pub number_of_videos: i32,
     pub max_short_length: i32,
+    pub caption_style: Option<CaptionStyle>,
+    pub words: Option<Vec<Word>>,
 }
 
 pub async fn spawn_worker_gemini_analysis(
@@ -39,6 +42,8 @@ pub async fn spawn_worker_gemini_analysis(
                         video_path,
                         srt_content: msg.srt_content,
                         segments,
+                        caption_style: msg.caption_style,
+                        words: msg.words,
                     }).await;
                 }
             }
@@ -141,4 +146,96 @@ fn extract_last_timestamp(srt: &str) -> Option<String> {
     srt.lines()
         .rev()
         .find_map(|l| l.split(" --> ").nth(1).map(|s| s.trim().to_string()))
+}
+
+/// Ask Gemini to apply the Hormozi emphasis rules to one clip's words:
+/// pick the single most important word per sentence to highlight, and pop an
+/// emoji next to words with a clear visual anchor. Returns word indices that
+/// align with the `words` slice passed in.
+pub async fn annotate_captions(words: &[String], style: CaptionStyle, api_key: &str) -> CaptionAnnotation {
+    if words.is_empty() {
+        return CaptionAnnotation::default();
+    }
+
+    let indexed: String = words
+        .iter()
+        .enumerate()
+        .map(|(i, w)| format!("{i}:{w}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    );
+
+    let body = serde_json::json!({
+        "contents": [{
+            "parts": [{
+                "text": format!(
+                    "You are styling burned-in captions for a short video in the '{style:?}' style. \
+                     Below is the clip's transcript as space-separated INDEX:WORD tokens (indices are 0-based). \
+                     Apply two rules:\n\
+                     1) HIGHLIGHT: for each sentence/clause, choose the single most important or emotionally \
+                     charged word and return its index. Roughly one highlight per 4-8 words; never highlight \
+                     filler words (the, a, and, to, of, is).\n\
+                     2) EMOJI: where a word has an obvious matching emoji (e.g. money->money, growth->chart up, \
+                     fire/best->fire), return that word's index and a single emoji character. Be sparing: only \
+                     when it clearly reinforces meaning, at most one emoji per ~8 words.\n\
+                     Return indices that exist in the input. Tokens:\n{indexed}"
+                )
+            }]
+        }],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 1024,
+            "temperature": 0.4,
+            "thinkingConfig": { "thinkingBudget": 0 },
+            "responseSchema": {
+                "type": "OBJECT",
+                "properties": {
+                    "highlights": {
+                        "type": "ARRAY",
+                        "items": { "type": "INTEGER" },
+                        "description": "Word indices to highlight in the accent colour"
+                    },
+                    "emojis": {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "OBJECT",
+                            "properties": {
+                                "index": { "type": "INTEGER" },
+                                "emoji": { "type": "STRING" }
+                            },
+                            "required": ["index", "emoji"]
+                        },
+                        "description": "Emoji anchors keyed by word index"
+                    }
+                },
+                "required": ["highlights", "emojis"]
+            }
+        }
+    });
+
+    let response = match reqwest::Client::new().post(&url).json(&body).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            println!("[captions] gemini styling request failed: {e}");
+            return CaptionAnnotation::default();
+        }
+    };
+
+    let raw = response.text().await.unwrap_or_default();
+    let value: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("[captions] failed to parse styling body: {e}");
+            return CaptionAnnotation::default();
+        }
+    };
+
+    let text = value["candidates"][0]["content"]["parts"][0]["text"]
+        .as_str()
+        .unwrap_or("{}");
+
+    serde_json::from_str::<CaptionAnnotation>(text).unwrap_or_default()
 }
