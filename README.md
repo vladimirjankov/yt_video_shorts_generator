@@ -18,6 +18,7 @@ Generate api key in google studios
 https://aistudio.google.com/app/api-keys?project=gen-lang-client-0317339696
 Create .env file in the root of the project and place it like this GEMINI_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
+docker build -t yt-shorts .
 
 Or go with the Docker:
 docker run --rm -p 3000:3000 \
