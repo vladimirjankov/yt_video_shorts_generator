@@ -21,8 +21,9 @@ Create .env file in the root of the project and place it like this GEMINI_API_KE
 docker build -t yt-shorts .
 
 Or go with the Docker:
-docker run --rm -p 3000:3000 \
-  -e GEMINI_API_KEY="$GEMINI_API_KEY" \
+docker run --rm \
+  -p 3000:3000 \
+  --env-file .env \
   -v "$(pwd)/service_account.json:/app/service_account.json:ro" \
   -v "$(pwd)/downloads:/app/downloads" \
-  short-gen
+  yt-shorts
